@@ -1,0 +1,165 @@
+---
+format: 
+  pdf:
+    mainfont: Garamond
+    sansfont: Garamond
+    fontsize: 12pt
+    tbl-cap-location: bottom
+    fig-pos: H
+    include-in-header: 
+      text: |
+        \usepackage[letterpaper, margin=1in]{geometry}
+    header-includes:
+      - \usepackage{float}
+      - \floatplacement{table}{H}
+      - \usepackage{booktabs}
+      - \usepackage{longtable}
+      - \usepackage{array}
+      - \usepackage{multirow}
+      - \usepackage{wrapfig}
+      - \usepackage{amsmath}
+project:
+  execute-dir: project
+---
+
+<!-- setup -->
+
+```{r}
+#| include: false
+#| label: setup
+extrafont::loadfonts("all", quiet = TRUE)
+# run inference script
+source("./02 inference.R")
+```
+
+<!-- title page -->
+
+```{r}
+#| include: false
+#| label: title
+date <- Sys.Date()
+author <- "Garrett Catlin and Sarah Doyle"
+title <- "Effects of Moon Illumination on Observed Lek Attendance for Greater Sage-Grouse"
+```
+
+```{=tex}
+\begin{center}
+\topskip0pt
+\vspace*{\fill}
+    \includegraphics[width=0.11\textwidth]{Quarto/WGFD.png}\par
+    {\large\bfseries `r title` \par}
+    {\normalsize `r author` \par}
+    {\normalsize `r date`\par}
+\vspace*{\fill}
+\end{center}
+\pagenumbering{gobble}
+```
+
+```{=tex}
+\newpage
+\pagenumbering{arabic}
+```
+
+# Summary
+
+There is 99% posterior-probability that illumination of the moon affects observed lek attendance in Greater Sage-grouse. On a full moon, observed attendance is depressed by `r sum[mgmt == "Statewide", percent_decrease]`% (corresponding to a decrease of `r sum[mgmt == "Statewide", abs(moon)]` males) statewide compared with observed attendance at a new moon; however, this decrease (and statistical significance) varies by Wyoming Game & Fish Department (WGFD) Management Area. If data collection must occur during a full moon, we recommend surveyors adhere to the  the saying "the earlier the better" as it is hypothesized the reason for this decrease is that the grouse are active all throughout the night.
+
+# Methods
+
+Data used for analysis were comprised of WGFD's rich observation history from 2000 to 2024. Times were cleaned where possible (I.E., "70:30" became 07:30 and "0:640" became 06:40) and subset to times between 04:00 and 10:00. The final dataset used for analysis included `r nrow(dat) |> format(big.mark = ",")` observations. Sample sizes by Management Area can be seen in @tbl-mgmt-sample-size.
+
+```{r}
+#| echo: false
+frac <- dat[, quantile(round(MoonFraction, digits = 3), probs = c(0.025, 0.5, 0.975))]
+frac_m <- dat[, round(mean(MoonFraction), digits = 3)]
+```
+
+A moon illumination "fraction" was computed for each observation via the `suncalc` R package by taking the lek location and observation date and using this information to calculate the exact moon illumination for that date. Moon illumination ranges from 0 to 1 with 0 representing a new moon and 1 representing a full moon. 95% of the moon fractions in the data were between `r frac[1]` and `r frac[3]` with the median moon illumination at `r frac[2]` and the mean moon illumination at `r frac_m`.
+
+Statistical modeling was conducted via the `brms` R package due to its ability to effectively handle both complex splines and mixed-effects models. Models were constructed with observed lek attendance (males) as the response with a variety of predictors, including the aforementioned moon illumination fraction. The best-performing model according to the Watanabe–Akaike information criterion (WAIC) was a model that accounted for Management Area, Week of Year (like Julian-date but for weeks), Survey Time, and Year. A loose representation of the final model is
+
+\begin{equation}
+    \begin{aligned}
+      \textrm{Observed Attendance} & \sim 1 + \textrm{Moon Illumination} +
+      s(\textrm{Week of Year}) + s(\textrm{Survey Time}) + \\ 
+                          & s(\textrm{Year}, by = \textrm{Management Area}) + \\
+                          & (1 + \textrm{Moon Illumination}|\textrm{Management Area}).
+    \end{aligned}
+\end{equation}
+
+Though moon fraction was the primary predictor of interest, these other terms can be thought of as "controls" to minimize spurious inference. By accounting for other predictors, if the trend of moon fraction is statistically significant, it is hoped any conclusions reached about the effect of the moon on attendance are derived from "signal" and not from "noise".
+
+\clearpage
+
+# Results
+
+Moon illumination was deemed a significant predictor of observed lek attendance of Greater Sage-grouse with 99% posterior probability. On a full moon, attendance is depressed by `r sum[mgmt == "Statewide", percent_decrease]`% (corresponding to a decrease of `r sum[mgmt == "Statewide", abs(moon)]` males) statewide compared with attendance at a new moon. This trend varies by WGFD Management Area as seen in @tbl-moon, below. Of note, there is 99% posterior probability that moon illumination does NOT influence lek attendance for management areas A and C.
+
+```{r}
+#| echo: false
+#| label: tbl-moon
+#| tbl-cap: Effects of Moon Illumination on Lek Attendance
+#| tbl-cap-location: bottom
+sum |>
+    kableExtra::kable(
+        "latex",
+        align = "c",
+        booktabs = TRUE,
+        escape = FALSE,
+        col.names = c(
+            "Management Area",
+            "Intercept",
+            "Slope of Moon Illumination (Decrease in Observed Males)",
+            "Q0.5",
+            "Q99.5",
+            "Percent Decrease",
+            "Statistically Significant"
+        )
+    ) |>
+    kableExtra::column_spec(c(1:2, 6:7), width = "2cm") |>
+    kableExtra::column_spec(c(3), "4cm") |>
+    kableExtra::row_spec(1, background = meadowlark) |>
+    kableExtra::row_spec(seq(3, nrow(sum), by = 2), background = "#F5F5F5")
+```
+
+@fig-moon shows the statewide trend visually and @fig-moon-mgmt shows the trends by management area. For both figures, other predictors are held at their mean values (the percentage decrease and slope is the same but the intercept will vary from @tbl-moon because of this).
+
+Plots are also included for the other predictors that were accounted for. @fig-woy shows the effects of week of year on recorded lek attendance. @fig-year shows the population trends in attendance over time. @fig-year-mgmt shows the population trends in attendance over time by managment area. Finally, @fig-time shows the effects of survey time on recorded lek attendance.
+
+
+<!-- Appendix -->
+
+\clearpage
+
+# Appendix
+
+```{r}
+#| echo: false
+#| label: tbl-mgmt-sample-size
+#| tbl-cap: Sample Size by Mangement Area
+#| tbl-cap-location: bottom
+dat[, .(`Sample Size` = .N), by = .(`Managment Area` = LekMGMT)] |>
+    kableExtra::kable(
+        format = "latex", booktabs = TRUE,
+        format.args = list(big.mark = ",")
+    )
+```
+
+![Effect of Moon Illumination on Observed Lek Attendance](Plots/moon.png){#fig-moon}
+
+\clearpage
+
+![Effect of Moon Illumination on Observed Lek Attendance by Managment Area](Plots/moon_mgmt.png){#fig-moon-mgmt}
+
+\clearpage
+
+![Effect of Week of Year on Observed Lek Attendance](Plots/woy.png){#fig-woy}
+
+![Effect of Year on Observed Lek Attendance](Plots/year.png){#fig-year}
+
+![Effect of Year on Observed Lek Attendance by Management Area](Plots/year_mgmt.png){#fig-year-mgmt}
+
+
+![Effect of Survey Time on Observed Lek Attendance](Plots/time.png){#fig-time}
+
+
