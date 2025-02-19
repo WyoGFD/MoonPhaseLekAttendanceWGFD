@@ -1,5 +1,5 @@
 #' deps
-#' 
+#'
 #' @description
 #' Install repo dependencies
 deps <- function() {
@@ -12,6 +12,23 @@ deps <- function() {
     if (!"renv" %in% inst) {
         utils::install.packages("renv", repos = "https://cloud.r-project.org")
     }
+
+    # install cmdstanr
+    if (!"cmdstanr" %in% inst) {
+        utils::install.packages(
+            "cmdstanr",
+            repos = c(
+                "https://stan-dev.r-universe.dev",
+                getOption("repos")
+            )
+        )
+        cmdstanr::install_cmdstan()
+    }
+
+    # get installed packages
+    inst <- utils::installed.packages() |>
+        as.data.frame() |>
+        getElement("Package")
 
     # get dir dependencies
     pkgs <- renv::dependencies(quiet = TRUE) |>
